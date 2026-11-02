@@ -149,7 +149,6 @@ final class ShakeTracker {
         let r = screenFrame(fraction: layouts[h.layout][h.zone], on: screen)
         dlog("snapping to layout \(h.layout) zone \(h.zone)")
         lastSnap = (w, start.origin, start.size)   // undo puts it back where the drag began
-        remember(w)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { applyFrame(w, r) }   // let the app finish its own drag first
     }
 

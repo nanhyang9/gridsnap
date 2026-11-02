@@ -27,7 +27,6 @@ func applyPreset(_ p: Preset) {
     guard let win = pickTarget() else { return }
     if let o = axFrame(win) { lastSnap = (win, o.0, o.1) }
     applyFrame(win, screenFrame(fraction: NSRect(x: p.x, y: p.y, width: p.w, height: p.h), on: screenOf(win)))
-    remember(win)
 }
 func alert(_ text: String) { let a = NSAlert(); a.messageText = text; a.runModal() }
 
