@@ -21,6 +21,10 @@ final class MenuActions: NSObject {
         try? (svc.status == .enabled ? svc.unregister() : svc.register())
         item.state = svc.status == .enabled ? .on : .off
     }
+    @objc func toggleShake(_ item: NSMenuItem) {
+        defaults.set(!defaults.bool(forKey: "shakeLayouts"), forKey: "shakeLayouts")
+        item.state = defaults.bool(forKey: "shakeLayouts") ? .on : .off
+    }
 }
 let actions = MenuActions()
 

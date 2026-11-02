@@ -6,6 +6,7 @@ An open source alternative to [Divvy](https://mizage.com/divvy/) for macOS. Pres
 
 - Grid overlay with live preview: the window follows your drag and jumps back if you cancel
 - Presets with their own global shortcuts; a Full screen preset on ⌃⌥F comes built in
+- Shake a window by its title bar to get a Windows 11 style layouts panel, then drop it on a zone
 - Undo the last snap
 - Configurable grid size and gap between windows
 - Snap the focused window or the one under the cursor
@@ -53,12 +54,15 @@ open /Applications/GridSnap.app
 | Save a preset | Hold Shift when releasing or pressing Return, or use **+** in Settings |
 | Apply a preset | Its shortcut, or the Presets menu |
 | Undo last snap | ⌃⌥Z by default, press again to redo |
+| Snap layouts | Drag a window by its title bar and shake it left-right twice; keep dragging onto a zone in the panel at the top of the screen and release |
 
 The grid opens with the window's current cells outlined, so Return alone aligns it to the grid.
 
 The grid appears on the display under the cursor and the window snaps to that display, so moving the mouse to another monitor before pressing the shortcut moves the window there. Presets snap to the display the window is already on.
 
 Wider gutters in the grid mark halves, thirds and quarters.
+
+The layouts panel offers halves, ⅔ + ⅓, thirds, a half with two quarters, four quarters and ¼ + ½ + ¼. Hovering a zone outlines where the window will land; releasing anywhere outside the panel just drops the window as usual. Undo returns the window to where the drag began. Turn it off with **Shake Window for Layouts** in the menu bar menu.
 
 **Settings** (menu bar icon › Settings…) holds both shortcuts, columns and rows, the gap in points between snapped windows, the target rule, and the presets table. Names and shortcuts are editable in place; **−** removes the selected preset.
 
@@ -71,7 +75,7 @@ Wider gutters in the grid mark halves, thirds and quarters.
 
 `Resources/icon.png` is the icon source; regenerate `AppIcon.icns` from it with `iconutil` if you change it.
 
-Files in `Sources/`: `main.swift` startup, `AX.swift` window plumbing, `Grid.swift` overlay, `Presets.swift`, `Hotkeys.swift`, `ShortcutButton.swift` recorder, `SettingsWindow.swift`, `Menu.swift`, `Defaults.swift` stored settings.
+Files in `Sources/`: `main.swift` startup, `AX.swift` window plumbing, `Grid.swift` overlay, `Shake.swift` drag-shake layouts panel, `Presets.swift`, `Hotkeys.swift`, `ShortcutButton.swift` recorder, `SettingsWindow.swift`, `Menu.swift`, `Defaults.swift` stored settings.
 
 macOS ties the Accessibility grant to the app's code signature. The default ad-hoc signature changes with every build, so you'd re-grant permission after each rebuild. To avoid that, create a self-signed certificate once (Keychain Access › Certificate Assistant › Create a Certificate, type "Code Signing", name it `GridSnap Dev`) and the build script picks it up. Any other identity works via `CODESIGN_IDENTITY="name" ./build.sh`.
 
