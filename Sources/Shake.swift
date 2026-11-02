@@ -209,7 +209,8 @@ final class ShakeTracker {
 let shake = ShakeTracker()
 
 func installShakeMonitor() {   // global monitors only see other apps' events, which is exactly what we want here
-    dlog("monitor installed, Shake Window for Layouts is \(defaults.bool(forKey: "shakeLayouts") ? "on" : "off")")
+    let state = defaults.bool(forKey: "shakeLayouts") ? "on" : "off"
+    dlog("monitor installed, Shake Window for Layouts is " + state)
     NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { e in
         switch e.type {
         case .leftMouseDown: shake.mouseDown()
