@@ -75,6 +75,31 @@ let zonePreview: NSPanel = {   // outline of where the window will land
     return p
 }()
 
+// `defaults write com.zerodivisionerror.gridsnap debugShake -bool true`, relaunch, then
+// `log stream --predicate 'process == "GridSnap"'` shows why a shake did or didn't open the panel
+let shakeDebug = defaults.bool(forKey: "debugShake")
+func dlog(_ s: @autoclosure () -> String) { if shakeDebug { NSLog("shake: %@", s()) } }
+
+// window positions come from the window server, which moves a dragged window itself;
+// an app's own AX position can lag behind during a drag. Coordinates: top-left of the primary screen, like AX
+func cgWindow(at d: NSPoint) -> (id: CGWindowID, bounds: CGRect)? {   // frontmost ordinary window under the point
+    let p = CGPoint(x: d.x, y: NSScreen.screens[0].frame.maxY - d.y), me = ProcessInfo.processInfo.processIdentifier
+    let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    for w in info {   // front to back
+        guard (w[kCGWindowLayer as String] as? Int) == 0, (w[kCGWindowOwnerPID as String] as? pid_t) != me,
+              (w[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+              let n = w[kCGWindowNumber as String] as? CGWindowID, let b = w[kCGWindowBounds as String],
+              let r = CGRect(dictionaryRepresentation: b as! CFDictionary), r.contains(p) else { continue }
+        return (n, r)
+    }
+    return nil
+}
+func cgBounds(_ id: CGWindowID) -> CGRect? {
+    guard let info = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+          let b = info.first?[kCGWindowBounds as String] else { return nil }
+    return CGRect(dictionaryRepresentation: b as! CFDictionary)
+}
+
 final class ShakeTracker {
     static let titleBand: CGFloat = 56        // how far below a window's top edge a press still counts as its title bar
     static let minStroke: CGFloat = 30        // shortest horizontal swing that counts
@@ -82,7 +107,8 @@ final class ShakeTracker {
     static let within: TimeInterval = 1.5     // all of them inside this many seconds
 
     var down: NSPoint?, looked = false
-    var win: AXUIElement?, start: (CGPoint, CGSize)?
+    var cgID: CGWindowID?, start: CGRect = .zero, moved = false   // the window grabbed by its title bar
+    var win: AXUIElement?                                         // the same window, for snapping
     var dir: CGFloat = 0, anchor: CGFloat = 0, extreme: CGFloat = 0, reversals: [TimeInterval] = []
     var showing = false, screen: NSScreen = .main!, hover: (layout: Int, zone: Int)?
 
@@ -97,35 +123,42 @@ final class ShakeTracker {
         guard let d = down else { return }
         let m = NSEvent.mouseLocation
         if showing { hoverAt(m); return }
-        if !looked { looked = true; lookUp(d) }   // on the first drag, not every click: plain clicks cost no AX calls
-        guard win != nil else { return }
-        if shook(m.x) { show() }
+        if !looked { looked = true; lookUp(d) }   // on the first drag, not every click
+        guard let id = cgID else { return }
+        if !moved, let b = cgBounds(id), hypot(b.minX - start.minX, b.minY - start.minY) >= 10 {   // a real window drag, not a text selection
+            moved = true; dlog("window is moving")
+        }
+        guard shook(m.x) else { return }
+        guard moved else { dlog("shake seen but the window never moved, ignoring"); return }
+        guard let w = windowAt(m) else { dlog("shake seen but no AX window under the cursor"); return }   // the dragged window follows the cursor
+        win = w; show()
     }
     func mouseUp() {
         defer { reset() }
         guard showing else { return }
         hidePanels()
-        guard let h = hover, let w = win else { return }
+        guard let h = hover, let w = win else { dlog("released outside the zones"); return }
         let r = screenFrame(fraction: layouts[h.layout][h.zone], on: screen)
-        if let s = start { lastSnap = (w, s.0, s.1) }   // undo puts it back where the drag began
+        dlog("snapping to layout \(h.layout) zone \(h.zone)")
+        lastSnap = (w, start.origin, start.size)   // undo puts it back where the drag began
         remember(w)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { applyFrame(w, r) }   // let the app finish its own drag first
     }
 
     func reset() {
-        down = nil; looked = false; win = nil; start = nil
+        down = nil; looked = false; cgID = nil; moved = false; win = nil
         dir = 0; reversals = []; showing = false; hover = nil
     }
     func lookUp(_ d: NSPoint) {   // was the press on a window's title bar?
-        guard let w = windowAt(d), let f = axFrame(w) else { return }
-        let y = NSScreen.screens[0].frame.maxY - d.y - f.0.y   // press distance below the window's top edge
-        guard y >= 0, y <= ShakeTracker.titleBand, d.x >= f.0.x, d.x <= f.0.x + f.1.width else { return }
-        win = w; start = f
+        guard let hit = cgWindow(at: d) else { dlog("no window under the press"); return }
+        let y = NSScreen.screens[0].frame.maxY - d.y - hit.bounds.minY   // press distance below the window's top edge
+        guard y <= ShakeTracker.titleBand else { dlog("press \(Int(y))pt below the window top, not a title bar"); return }
+        dlog("title bar press on window \(hit.id), \(Int(y))pt below its top")
+        cgID = hit.id; start = hit.bounds
     }
     func shook(_ x: CGFloat) -> Bool {
-        if dir == 0 {   // first swing: also proves the window really moves with the mouse (not a text selection etc.)
+        if dir == 0 {   // first swing
             guard abs(x - anchor) >= ShakeTracker.minStroke else { return false }
-            guard let w = win, let s = start, let f = axFrame(w), hypot(f.0.x - s.0.x, f.0.y - s.0.y) >= 10 else { win = nil; return false }
             dir = x > anchor ? 1 : -1; extreme = x
             return false
         }
@@ -134,6 +167,7 @@ final class ShakeTracker {
         let now = ProcessInfo.processInfo.systemUptime
         anchor = extreme; extreme = x; dir = -dir
         reversals = reversals.filter { now - $0 <= ShakeTracker.within } + [now]
+        dlog("direction change \(reversals.count)/\(ShakeTracker.reversalsNeeded)")
         return reversals.count >= ShakeTracker.reversalsNeeded
     }
 
@@ -151,6 +185,7 @@ final class ShakeTracker {
         layoutsPanel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { $0.duration = 0.12; layoutsPanel.animator().alphaValue = 1 }
         hoverAt(NSEvent.mouseLocation)
+        dlog("layouts panel shown")
     }
     func hoverAt(_ m: NSPoint) {
         let h = layoutsView.zone(at: layoutsView.convert(layoutsPanel.convertPoint(fromScreen: m), from: nil))
