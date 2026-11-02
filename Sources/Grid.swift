@@ -132,18 +132,21 @@ final class Panel: NSPanel {
     override func resignKey() { super.resignKey(); view.cancel() }
 }
 
+func glass(around content: NSView) -> NSView {   // rounded glass backdrop shared by the grid and the layouts panel
+    if #available(macOS 26, *) {
+        let g = NSGlassEffectView(); g.cornerRadius = 18; g.contentView = content
+        g.wantsLayer = true; g.layer?.cornerRadius = 18; g.layer?.masksToBounds = true  // clip the backdrop too
+        return g
+    }
+    let v = NSVisualEffectView(); v.material = .hudWindow; v.state = .active
+    v.wantsLayer = true; v.layer?.cornerRadius = 18; v.addSubview(content)
+    return v
+}
+
 let view = GridView()
 let panel: Panel = {
     let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-    let glass: NSView
-    if #available(macOS 26, *) {
-        let g = NSGlassEffectView(); g.cornerRadius = 18; g.contentView = view; glass = g
-        g.wantsLayer = true; g.layer?.cornerRadius = 18; g.layer?.masksToBounds = true  // clip the backdrop too
-    } else {
-        let v = NSVisualEffectView(); v.material = .hudWindow; v.state = .active
-        v.wantsLayer = true; v.layer?.cornerRadius = 18; v.addSubview(view); glass = v
-    }
-    panel.contentView = glass
+    panel.contentView = glass(around: view)
     panel.appearance = NSAppearance(named: .darkAqua)
     panel.hasShadow = false  // a shadow is computed on the square bounds and leaks through the corners
     panel.level = .floating

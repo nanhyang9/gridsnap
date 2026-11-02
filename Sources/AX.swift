@@ -12,8 +12,8 @@ func focusedWindow() -> AXUIElement? {
     return (w as! AXUIElement)
 }
 
-func windowUnderCursor() -> AXUIElement? {
-    let m = NSEvent.mouseLocation
+func windowUnderCursor() -> AXUIElement? { windowAt(NSEvent.mouseLocation) }
+func windowAt(_ m: NSPoint) -> AXUIElement? {
     var hit: AXUIElement?
     guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(m.x), Float(NSScreen.screens[0].frame.maxY - m.y), &hit) == .success,
           let el = hit else { return nil }

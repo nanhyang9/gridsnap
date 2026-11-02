@@ -1,5 +1,5 @@
 // gridsnap — hotkey, drag a grid, focused window snaps to it. Build: ./build.sh
-// Sources/: Defaults (stored settings), AX (window plumbing), Grid (overlay), Presets, Hotkeys, ShortcutButton, SettingsWindow, Menu
+// Sources/: Defaults (stored settings), AX (window plumbing), Grid (overlay), Shake (drag-shake layouts), Presets, Hotkeys, ShortcutButton, SettingsWindow, Menu
 import Cocoa
 
 let app = NSApplication.shared
@@ -8,6 +8,7 @@ _ = statusItem   // globals outside main.swift are lazy; touching it builds the 
 
 func startApp() {
     installHotKeyHandler()
+    installShakeMonitor()
     // clicks on other apps never reach the panel; a global monitor sees them and dismisses
     NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in view.cancel() }
 }

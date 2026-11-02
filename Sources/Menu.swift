@@ -27,6 +27,10 @@ let statusItem: NSStatusItem = {
     let login = menu.addItem(withTitle: "Launch at Login", action: #selector(MenuActions.toggleLogin), keyEquivalent: "")
     login.target = actions
     login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+    let shakeItem = menu.addItem(withTitle: "Shake Window for Layouts", action: #selector(MenuActions.toggleShake), keyEquivalent: "")
+    shakeItem.target = actions
+    shakeItem.state = defaults.bool(forKey: "shakeLayouts") ? .on : .off
+    shakeItem.toolTip = "Shake a window left and right while dragging it by its title bar to pick a layout."
     menu.addItem(.separator())
     menu.addItem(withTitle: "Quit GridSnap", action: #selector(NSApplication.terminate), keyEquivalent: "q")
     status.menu = menu
