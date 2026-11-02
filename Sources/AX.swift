@@ -68,46 +68,6 @@ func screenFraction(of r: NSRect, on screen: NSScreen) -> NSRect {
         .intersection(NSRect(x: 0, y: 0, width: 1, height: 1))
 }
 
-var snapped: [AXUIElement] = []
-func remember(_ win: AXUIElement) { if !snapped.contains(where: { CFEqual($0, win) }) { snapped.append(win) } }
-func forget(_ win: AXUIElement) { snapped.removeAll { CFEqual($0, win) } }
-func ghostFractions(on screen: NSScreen) -> [NSRect] {
-    let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-    var onScreen: [(pid: pid_t, bounds: CGRect)] = info.compactMap {
-        guard let pid = $0[kCGWindowOwnerPID as String] as? pid_t, let b = $0[kCGWindowBounds as String],
-              let r = CGRect(dictionaryRepresentation: b as! CFDictionary) else { return nil }
-        return (pid, r)
-    }
-    guard !onScreen.isEmpty, !snapped.isEmpty else { return [] }
-    func claim(_ pid: pid_t, _ f: CGRect) -> Bool {
-        guard let i = onScreen.firstIndex(where: { $0.pid == pid && abs($0.bounds.minX - f.minX) <= 2 && abs($0.bounds.minY - f.minY) <= 2
-                                                     && abs($0.bounds.width - f.width) <= 2 && abs($0.bounds.height - f.height) <= 2 }) else { return false }
-        onScreen.remove(at: i); return true
-    }
-    let top = NSScreen.screens[0].frame.maxY, target = targetWindow.map { [$0] } ?? []
-    var out: [NSRect] = [], stuck: Set<pid_t> = []
-    for (i, win) in (target + snapped.filter { w in !target.contains { CFEqual($0, w) } }).enumerated() {
-        var pid: pid_t = 0
-        AXUIElementGetPid(win, &pid)
-        guard let app = NSRunningApplication(processIdentifier: pid) else { forget(win); continue }
-        if app.isHidden || stuck.contains(pid) { continue }
-        AXUIElementSetMessagingTimeout(win, 0.2)
-        var p: CFTypeRef?, s: CFTypeRef?
-        var err = AXUIElementCopyAttributeValue(win, kAXPositionAttribute as CFString, &p)
-        if err == .success { err = AXUIElementCopyAttributeValue(win, kAXSizeAttribute as CFString, &s) }
-        AXUIElementSetMessagingTimeout(win, 0)
-        if err == .invalidUIElement { forget(win) }
-        if err == .cannotComplete { stuck.insert(pid) }
-        guard err == .success else { continue }
-        var f = CGRect.zero
-        AXValueGetValue(p as! AXValue, .cgPoint, &f.origin); AXValueGetValue(s as! AXValue, .cgSize, &f.size)
-        guard claim(pid, f), i >= target.count else { continue }
-        let u = screenFraction(of: NSRect(x: f.minX, y: top - f.maxY, width: f.width, height: f.height), on: screen)
-        if !u.isEmpty, !out.contains(u) { out.append(u) }
-    }
-    return out
-}
-
 var lastSnap: (win: AXUIElement, pos: CGPoint, size: CGSize)?
 func undoSnap() {
     view.cancel()

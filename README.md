@@ -8,7 +8,7 @@ An open source alternative to [Divvy](https://mizage.com/divvy/) for macOS. Pres
 - Presets with their own global shortcuts; a Full screen preset on ⌃⌥F comes built in
 - Shake a window by its title bar to get a Windows 11 style layouts panel, then drop it on a zone
 - Undo the last snap
-- Configurable grid size and gap between windows
+- Configurable grid size, gap between windows and panel color
 - Snap the focused window or the one under the cursor
 - Works across multiple displays
 - Menu bar app, launch at login, no Dock icon
@@ -64,7 +64,7 @@ Wider gutters in the grid mark halves, thirds and quarters.
 
 The layouts panel offers halves, ⅔ + ⅓, thirds, a half with two quarters, four quarters and ¼ + ½ + ¼. Hovering a zone outlines where the window will land; releasing anywhere outside the panel just drops the window as usual. Undo returns the window to where the drag began. Turn it off with **Shake Window for Layouts** in the menu bar menu.
 
-**Settings** (menu bar icon › Settings…) holds both shortcuts, columns and rows, the gap in points between snapped windows, the target rule, and the presets table. Names and shortcuts are editable in place; **−** removes the selected preset.
+**Settings** (menu bar icon › Settings…) holds both shortcuts, columns and rows, the gap in points between snapped windows, the panel color (a see-through tint over the glass of the grid and the layouts panel; **Default** restores it), the target rule, and the presets table. Names and shortcuts are editable in place; **−** removes the selected preset.
 
 ## Development
 
