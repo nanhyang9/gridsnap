@@ -14,7 +14,7 @@ let layouts: [[NSRect]] = [   // fractions of the visible screen, origin bottom-
 ]
 
 final class LayoutsView: NSView {
-    static let pad: CGFloat = 12, thumbW: CGFloat = 96, perRow = 3
+    static let pad: CGFloat = 16, thumbW: CGFloat = 100, perRow = 3
     static var rowCount: Int { (layouts.count + perRow - 1) / perRow }
     var thumbH: CGFloat = 54   // follows the screen's aspect ratio
     var hover: (layout: Int, zone: Int)?
@@ -38,12 +38,19 @@ final class LayoutsView: NSView {
     }
 
     override func draw(_ dirty: NSRect) {
-        for i in layouts.indices { for j in layouts[i].indices {
-            let on = hover?.layout == i && hover?.zone == j
-            let p = NSBezierPath(roundedRect: zoneRect(i, j).insetBy(dx: 1.5, dy: 1.5), xRadius: 4, yRadius: 4)
-            (on ? NSColor.controlAccentColor.withAlphaComponent(0.85) : NSColor.white.withAlphaComponent(0.12)).setFill(); p.fill()
-            NSColor.white.withAlphaComponent(on ? 0.7 : 0.3).setStroke(); p.stroke()
-        }}
+        panelTint.setFill(); NSBezierPath(roundedRect: bounds, xRadius: 18, yRadius: 18).fill()
+        let ink = panelInk
+        for i in layouts.indices {
+            let card = NSBezierPath(roundedRect: thumb(i).insetBy(dx: -4, dy: -4), xRadius: 9, yRadius: 9)   // a little screen per layout
+            ink.withAlphaComponent(hover?.layout == i ? 0.12 : 0.05).setFill(); card.fill()
+            ink.withAlphaComponent(0.10).setStroke(); card.lineWidth = 1; card.stroke()
+            for j in layouts[i].indices {
+                let p = NSBezierPath(roundedRect: zoneRect(i, j).insetBy(dx: 2, dy: 2), xRadius: 4, yRadius: 4)
+                if hover?.layout == i && hover?.zone == j { drawHighlight(p); continue }
+                ink.withAlphaComponent(hover?.layout == i ? 0.22 : 0.15).setFill(); p.fill()
+                ink.withAlphaComponent(0.25).setStroke(); p.lineWidth = 1; p.stroke()
+            }
+        }
     }
 }
 

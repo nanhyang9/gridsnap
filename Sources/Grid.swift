@@ -9,10 +9,11 @@ func cellRange(_ lo: CGFloat, _ hi: CGFloat, _ n: Int) -> ClosedRange<Int> {
 final class GridView: NSView {
     var start: (Int, Int)?, end: (Int, Int)?
     var active = false, moved = false, pending = false
+    var hoverCell: (Int, Int)?   // cell under the cursor before a drag starts
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for e: NSEvent?) -> Bool { true }
 
-    var grid: NSRect { bounds.insetBy(dx: 10, dy: 10) }
+    var grid: NSRect { bounds.insetBy(dx: 14, dy: 14) }
     func cell(_ e: NSEvent) -> (Int, Int) {
         let p = convert(e.locationInWindow, from: nil)
         return (min(max(Int((p.x - grid.minX) / grid.width * CGFloat(cols)), 0), cols - 1),
@@ -36,8 +37,22 @@ final class GridView: NSView {
         if let r = selectionFrame { applyFrame(win, r); moved = true } else if moved, let o = original { axSet(win, o.0, o.1) }
     }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+    override func mouseMoved(with e: NSEvent) {
+        guard active else { return }
+        let c = grid.contains(convert(e.locationInWindow, from: nil)) ? cell(e) : nil
+        guard c?.0 != hoverCell?.0 || c?.1 != hoverCell?.1 else { return }
+        hoverCell = c; needsDisplay = true
+    }
+    override func mouseExited(with e: NSEvent) { if hoverCell != nil { hoverCell = nil; needsDisplay = true } }
+
     override func mouseDown(with e: NSEvent) {
         guard active else { return }
+        hoverCell = nil
         start = cell(e); end = start; pending = false; needsDisplay = true   // no preview yet: one cell is a tiny window, wait for the drag
     }
     func track(_ e: NSEvent) {   // cursor outside the panel = no selection, so releasing there cancels
@@ -91,7 +106,10 @@ final class GridView: NSView {
 
     override func draw(_ dirty: NSRect) {
         guard !grid.isEmpty else { return }   // layer-backed views get drawn at zero size before the panel is shown
+        panelTint.setFill(); NSBezierPath(roundedRect: bounds, xRadius: 18, yRadius: 18).fill()
+        let ink = panelInk
         let cw = grid.width / CGFloat(cols), ch = grid.height / CGFloat(rows)
+        let radius = min(6, max(2, min(cw, ch) * 0.2))   // rounder corners on bigger cells
         // extra gap at boundary i of n: halves widest, thirds/quarters narrower, everything else uniform
         func gap(_ i: Int, _ n: Int) -> CGFloat {
             i == 0 || i == n ? 0 : (i * 2) % n == 0 ? 3 : (i * 3) % n == 0 || (i * 4) % n == 0 ? 1.5 : 0
@@ -103,28 +121,50 @@ final class GridView: NSView {
         func path(_ r: NSRect, tolX: CGFloat = 0, tolY: CGFloat = 0) -> NSBezierPath {
             let x0 = grid.minX + edge(r.minX, cols, cw, tolX, 1), x1 = grid.minX + edge(r.maxX, cols, cw, tolX, -1)
             let y0 = grid.minY + edge(r.minY, rows, ch, tolY, 1), y1 = grid.minY + edge(r.maxY, rows, ch, tolY, -1)
-            return NSBezierPath(roundedRect: NSRect(x: x0, y: y0, width: max(x1 - x0, 0), height: max(y1 - y0, 0)), xRadius: 4, yRadius: 4)
+            return NSBezierPath(roundedRect: NSRect(x: x0, y: y0, width: max(x1 - x0, 0), height: max(y1 - y0, 0)), xRadius: radius, yRadius: radius)
         }
         func rect(_ x: ClosedRange<Int>, _ y: ClosedRange<Int>) -> NSBezierPath {
             path(NSRect(x: x.lowerBound, y: y.lowerBound, width: x.count, height: y.count))
         }
         for x in 0..<cols { for y in 0..<rows {
-            let p = rect(x...x, y...y)
-            NSColor.white.withAlphaComponent(0.10).setFill(); p.fill()
-            NSColor.white.withAlphaComponent(0.20).setStroke(); p.stroke()
+            let p = rect(x...x, y...y), hot = hoverCell?.0 == x && hoverCell?.1 == y
+            ink.withAlphaComponent(hot ? 0.22 : 0.07).setFill(); p.fill()
+            ink.withAlphaComponent(hot ? 0.40 : 0.13).setStroke(); p.lineWidth = 1; p.stroke()
         }}
         let v = targetScreen.visibleFrame, c = CGFloat(cols), r = CGFloat(rows)
-        for u in ghosts {
+        for u in ghosts {   // other snapped windows: soft fill, dashed outline
             let p = path(NSRect(x: u.minX * c, y: u.minY * r, width: u.width * c, height: u.height * r), tolX: 2 * c / v.width, tolY: 2 * r / v.height)
-            NSColor.white.withAlphaComponent(0.25).setFill(); p.fill()
-            NSColor.white.withAlphaComponent(0.45).setStroke(); p.stroke()
+            ink.withAlphaComponent(0.12).setFill(); p.fill()
+            ink.withAlphaComponent(0.45).setStroke(); p.lineWidth = 1.5; p.setLineDash([4, 3], count: 2, phase: 0); p.stroke()
         }
         if let s = selection {
             let p = rect(s.x, s.y)
-            NSColor.controlAccentColor.withAlphaComponent(pending ? 0.3 : 0.85).setFill(); p.fill()
-            (pending ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.7)).setStroke(); p.lineWidth = pending ? 2 : 1.5; p.stroke()
+            if pending {   // the window's current cells
+                NSColor.controlAccentColor.withAlphaComponent(0.22).setFill(); p.fill()
+                NSColor.controlAccentColor.setStroke(); p.lineWidth = 2; p.stroke()
+            } else {
+                drawHighlight(p)
+                drawSizeLabel("\(s.x.count) × \(s.y.count)", in: p.bounds)
+            }
         }
     }
+}
+
+func drawHighlight(_ p: NSBezierPath) {   // accent fill with a soft glow and a lighter top, shared with the layouts panel
+    let accent = NSColor.controlAccentColor
+    NSGraphicsContext.saveGraphicsState()
+    let glow = NSShadow(); glow.shadowColor = accent.withAlphaComponent(0.55); glow.shadowBlurRadius = 10; glow.shadowOffset = .zero; glow.set()
+    accent.withAlphaComponent(0.9).setFill(); p.fill()
+    NSGraphicsContext.restoreGraphicsState()
+    NSGradient(starting: accent.withAlphaComponent(0.9), ending: (accent.blended(withFraction: 0.3, of: .white) ?? accent).withAlphaComponent(0.95))?
+        .draw(in: p, angle: 90)
+    NSColor.white.withAlphaComponent(0.55).setStroke(); p.lineWidth = 1; p.stroke()
+}
+func drawSizeLabel(_ text: String, in r: NSRect) {   // e.g. "6 × 4" in the middle of the selection, when it fits
+    let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: NSColor.white.withAlphaComponent(0.95)]
+    let s = NSAttributedString(string: text, attributes: attrs), size = s.size()
+    guard size.width + 8 <= r.width, size.height + 4 <= r.height else { return }
+    s.draw(at: NSPoint(x: r.midX - size.width / 2, y: r.midY - size.height / 2))
 }
 
 final class Panel: NSPanel {
@@ -153,6 +193,7 @@ let panel: Panel = {
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.hidesOnDeactivate = false
+    panel.acceptsMouseMovedEvents = true   // hover highlight
     panel.collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary]
     return panel
 }()
@@ -163,7 +204,7 @@ func showGrid() {
     view.original = targetWindow.flatMap(axFrame)
     if view.original == nil { targetWindow = nil }
     view.ghosts = ghostFractions(on: targetScreen)
-    view.start = nil; view.end = nil; view.moved = false; view.pending = false; view.needsDisplay = true
+    view.start = nil; view.end = nil; view.moved = false; view.pending = false; view.hoverCell = nil; view.needsDisplay = true
     if let o = view.original {
         let r = NSRect(x: o.0.x, y: NSScreen.screens[0].frame.maxY - o.0.y - o.1.height, width: o.1.width, height: o.1.height)
         let u = screenFraction(of: r, on: targetScreen)
