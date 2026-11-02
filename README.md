@@ -41,6 +41,8 @@ cd gridsnap
 open /Applications/GridSnap.app
 ```
 
+Step-by-step install and reinstall from this fork, including re-granting Accessibility after each build (in Korean): [INSTALL.md](INSTALL.md).
+
 ## Use
 
 | Action | How |
